@@ -1,0 +1,66 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  name        String
+  files       File[]
+  folders     Folder[]
+  activities  Activity[]
+  sharedFiles SharedFile[] @relation("SharedBy")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Folder {
+  id        String   @id @default(uuid())
+  name      String
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  files     File[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model File {
+  id        String   @id @default(uuid())
+  name      String
+  path      String
+  size      Int
+  type      String
+  category  String   @default("Uncategorized")
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  folderId  String?
+  folder    Folder?  @relation(fields: [folderId], references: [id])
+  shares    SharedFile[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model SharedFile {
+  id          String   @id @default(uuid())
+  fileId      String
+  file        File     @relation(fields: [fileId], references: [id])
+  sharedBy    String
+  userBy      User     @relation("SharedBy", fields: [sharedBy], references: [id])
+  sharedWith  String   // Email of the user this is shared with
+  permission  String   @default("Can View")
+  createdAt   DateTime @default(now())
+}
+
+model Activity {
+  id          String   @id @default(uuid())
+  description String
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  createdAt   DateTime @default(now())
+}
