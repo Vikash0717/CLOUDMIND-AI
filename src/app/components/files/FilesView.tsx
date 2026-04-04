@@ -16,6 +16,7 @@ interface FileItem {
   id: string;
   name: string;
   type: string;
+  category: string;
   size: string;
   uploadDate: string;
   starred: boolean;
@@ -60,6 +61,9 @@ export function FilesView() {
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    // Reset input value so the exact same file can be selected again immediately
+    e.target.value = '';
 
     const formData = new FormData();
     formData.append('file', file);
@@ -151,7 +155,7 @@ export function FilesView() {
         </div>
       </div>
 
-      {files.length === 0 && (
+      {files.length === 0 ? (
         <Card className="border-2 border-dashed border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800/50 hover-lift transition-smooth cursor-pointer" onClick={() => fileInputRef.current?.click()}>
           <CardContent className="p-12 text-center">
             <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4 animate-bounce-subtle" />
@@ -160,83 +164,110 @@ export function FilesView() {
             <Button variant="outline" className="dark:border-gray-600 dark:text-gray-300 hover-glow">Browse Files</Button>
           </CardContent>
         </Card>
-      )}
+      ) : (
+        <div className="space-y-8">
+          {Object.entries(
+            files.reduce((acc, file) => {
+              const cat = file.category || 'Uncategorized';
+              if (!acc[cat]) acc[cat] = [];
+              acc[cat].push(file);
+              return acc;
+            }, {} as Record<string, FileItem[]>)
+          ).sort(([a], [b]) => a === 'Uncategorized' ? -1 : a.localeCompare(b)).map(([category, categoryFiles]) => (
+            <div key={category} className="space-y-4">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="h-px bg-gray-200 dark:bg-gray-700 flex-1"></div>
+                <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                   📂 {category} ({categoryFiles.length})
+                </h3>
+                <div className="h-px bg-gray-200 dark:bg-gray-700 flex-1"></div>
+              </div>
 
-      {files.length > 0 && viewMode === 'grid' && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {files.map((file) => {
-            const Icon = getFileIcon(file.type);
-            const colorClasses = getFileColor(file.type);
-            return (
-              <Card key={file.id} className="border-0 shadow-md dark:bg-gray-800 hover:shadow-lg transition-shadow group">
-                <CardContent className="p-4">
-                  <div className="flex items-start justify-between mb-3">
-                    <div className={`p-3 rounded-lg ${colorClasses}`}><Icon className="w-6 h-6" /></div>
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button onClick={() => toggleStar(file.id)} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded">
-                        <Star className={`w-4 h-4 ${file.starred ? 'fill-yellow-400 text-yellow-400' : 'text-gray-400'}`} />
-                      </button>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded">
-                          <MoreVertical className="w-4 h-4 text-gray-500" />
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => handleShare(file)}><Share2 className="w-4 h-4 mr-2" /> Share</DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleDownload(file)}><Download className="w-4 h-4 mr-2" /> Download</DropdownMenuItem>
-                          <DropdownMenuItem className="text-red-600"><Trash2 className="w-4 h-4 mr-2" /> Delete</DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+              {viewMode === 'grid' ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                  {categoryFiles.map((file) => {
+                    const Icon = getFileIcon(file.type);
+                    const colorClasses = getFileColor(file.type);
+                    return (
+                      <Card key={file.id} className="border-0 shadow-md dark:bg-gray-800 hover:shadow-lg transition-shadow group relative">
+                        <div className="absolute top-2 right-2 text-xs font-medium px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-md opacity-0 group-hover:opacity-100 transition-opacity">
+                          {file.category}
+                        </div>
+                        <CardContent className="p-4">
+                          <div className="flex items-start justify-between mb-3">
+                            <div className={`p-3 rounded-lg ${colorClasses}`}><Icon className="w-6 h-6" /></div>
+                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button onClick={() => toggleStar(file.id)} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded">
+                                <Star className={`w-4 h-4 ${file.starred ? 'fill-yellow-400 text-yellow-400' : 'text-gray-400'}`} />
+                              </button>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded">
+                                  <MoreVertical className="w-4 h-4 text-gray-500" />
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem onClick={() => handleShare(file)}><Share2 className="w-4 h-4 mr-2" /> Share</DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => handleDownload(file)}><Download className="w-4 h-4 mr-2" /> Download</DropdownMenuItem>
+                                  <DropdownMenuItem className="text-red-600"><Trash2 className="w-4 h-4 mr-2" /> Delete</DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </div>
+                          </div>
+                          <h4 className="font-medium text-gray-900 dark:text-white text-sm mb-1 truncate">{file.name}</h4>
+                          <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+                            <span>{file.size}</span>
+                            <span>{new Date(file.uploadDate).toLocaleDateString()}</span>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
+              ) : (
+                <Card className="border-0 shadow-md dark:bg-gray-800">
+                  <CardContent className="p-0">
+                    <div className="divide-y divide-gray-200 dark:divide-gray-700">
+                      {categoryFiles.map((file) => {
+                        const Icon = getFileIcon(file.type);
+                        const colorClasses = getFileColor(file.type);
+                        return (
+                          <div key={file.id} className="flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors group">
+                            <div className="flex items-center gap-3 flex-1">
+                              <div className={`p-2 rounded-lg ${colorClasses}`}><Icon className="w-5 h-5" /></div>
+                              <div className="flex-1 min-w-0">
+                                <h4 className="font-medium text-gray-900 dark:text-white truncate">{file.name}</h4>
+                                <div className="flex items-center gap-2 mt-1">
+                                  <span className="text-xs px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded">
+                                    {file.category}
+                                  </span>
+                                  <p className="text-sm text-gray-500 dark:text-gray-400">{file.size} • {new Date(file.uploadDate).toLocaleDateString()}</p>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button onClick={() => toggleStar(file.id)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded">
+                                <Star className={`w-4 h-4 ${file.starred ? 'fill-yellow-400 text-yellow-400' : 'text-gray-400'}`} />
+                              </button>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded">
+                                  <MoreVertical className="w-4 h-4 text-gray-500" />
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem onClick={() => handleShare(file)}><Share2 className="w-4 h-4 mr-2" /> Share</DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => handleDownload(file)}><Download className="w-4 h-4 mr-2" /> Download</DropdownMenuItem>
+                                  <DropdownMenuItem className="text-red-600"><Trash2 className="w-4 h-4 mr-2" /> Delete</DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
-                  </div>
-                  <h4 className="font-medium text-gray-900 dark:text-white text-sm mb-1 truncate">{file.name}</h4>
-                  <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
-                    <span>{file.size}</span>
-                    <span>{new Date(file.uploadDate).toLocaleDateString()}</span>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-      )}
-
-      {files.length > 0 && viewMode === 'list' && (
-        <Card className="border-0 shadow-md dark:bg-gray-800">
-          <CardContent className="p-0">
-            <div className="divide-y divide-gray-200 dark:divide-gray-700">
-              {files.map((file) => {
-                const Icon = getFileIcon(file.type);
-                const colorClasses = getFileColor(file.type);
-                return (
-                  <div key={file.id} className="flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors group">
-                    <div className="flex items-center gap-3 flex-1">
-                      <div className={`p-2 rounded-lg ${colorClasses}`}><Icon className="w-5 h-5" /></div>
-                      <div className="flex-1 min-w-0">
-                        <h4 className="font-medium text-gray-900 dark:text-white truncate">{file.name}</h4>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">{file.size} • {new Date(file.uploadDate).toLocaleDateString()}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button onClick={() => toggleStar(file.id)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded">
-                        <Star className={`w-4 h-4 ${file.starred ? 'fill-yellow-400 text-yellow-400' : 'text-gray-400'}`} />
-                      </button>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded">
-                          <MoreVertical className="w-4 h-4 text-gray-500" />
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => handleShare(file)}><Share2 className="w-4 h-4 mr-2" /> Share</DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleDownload(file)}><Download className="w-4 h-4 mr-2" /> Download</DropdownMenuItem>
-                          <DropdownMenuItem className="text-red-600"><Trash2 className="w-4 h-4 mr-2" /> Delete</DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                  </div>
-                );
-              })}
+                  </CardContent>
+                </Card>
+              )}
             </div>
-          </CardContent>
-        </Card>
+          ))}
+        </div>
       )}
 
       <ShareFileModal isOpen={isShareModalOpen} onClose={() => setIsShareModalOpen(false)} fileName={selectedFile?.name || ''} fileId={selectedFile?.id || ''} />

@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Progress } from '../ui/progress';
@@ -11,70 +12,49 @@ import {
   HardDrive,
   Files,
 } from 'lucide-react';
-
-const duplicateFiles = [
-  {
-    id: '1',
-    name: 'vacation-photo.jpg',
-    copies: 3,
-    totalSize: '12.3 MB',
-    locations: ['/Photos/2024/', '/Photos/Backup/', '/Photos/Summer/'],
-  },
-  {
-    id: '2',
-    name: 'presentation-final.pptx',
-    copies: 5,
-    totalSize: '41.0 MB',
-    locations: ['/Documents/', '/Desktop/', '/Work/', '/Backup/', '/Old Files/'],
-  },
-  {
-    id: '3',
-    name: 'invoice-template.pdf',
-    copies: 2,
-    totalSize: '1.2 MB',
-    locations: ['/Documents/Templates/', '/Desktop/'],
-  },
-];
-
-const largeFiles = [
-  { name: 'project-demo-video.mp4', size: '850 MB', lastAccessed: '90 days ago', type: 'Video' },
-  { name: 'database-backup-2023.sql', size: '642 MB', lastAccessed: '120 days ago', type: 'Database' },
-  { name: 'design-assets.zip', size: '425 MB', lastAccessed: '60 days ago', type: 'Archive' },
-  { name: 'old-project-files.zip', size: '380 MB', lastAccessed: '150 days ago', type: 'Archive' },
-];
-
-const optimizationSuggestions = [
-  {
-    title: 'Remove Duplicate Files',
-    description: '12 duplicate files found across your storage',
-    savings: '156 MB',
-    icon: Copy,
-    color: 'blue',
-  },
-  {
-    title: 'Archive Old Files',
-    description: '23 files not accessed in 90+ days',
-    savings: '2.4 GB',
-    icon: Archive,
-    color: 'purple',
-  },
-  {
-    title: 'Delete Empty Folders',
-    description: '8 empty folders detected',
-    savings: 'Minimal',
-    icon: Trash2,
-    color: 'red',
-  },
-  {
-    title: 'Compress Large Files',
-    description: '15 large files that can be compressed',
-    savings: '890 MB',
-    icon: Files,
-    color: 'green',
-  },
-];
+import api from '../../../lib/api';
 
 export function StorageOptimizationView() {
+  const [data, setData] = useState({
+    duplicateFiles: [] as any[],
+    largeFiles: [] as any[],
+    optimizationSuggestions: [] as any[],
+    metrics: { duplicateSavingsBytes: 0, oldFilesSavingsBytes: 0 }
+  });
+  const [loading, setLoading] = useState(true);
+  const [selectedArchives, setSelectedArchives] = useState<Set<string>>(new Set());
+
+  const fetchOptimizationData = async () => {
+    try {
+      const response = await api.get('/optimization');
+      setData(response.data);
+    } catch (error) {
+      console.error('Failed to fetch optimization data', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchOptimizationData();
+  }, []);
+
+  const totalSavingsGB = ((data.metrics.duplicateSavingsBytes + data.metrics.oldFilesSavingsBytes) / (1024 * 1024 * 1024)).toFixed(2);
+
+  const handleBulkDelete = async (ids: string[]) => {
+    try {
+      if (ids.length === 0) return;
+      await api.post(`/optimization/bulk-delete`, { ids });
+      fetchOptimizationData();
+      setSelectedArchives(new Set());
+    } catch (error) {
+      console.error('Failed to bulk delete', error);
+      alert('Failed to delete files');
+    }
+  };
+
+  if (loading) return <div className="p-8 text-center text-gray-500">Scanning your cloud storage for optimizations...</div>;
+
   return (
     <div className="space-y-6">
       <div>
@@ -98,16 +78,26 @@ export function StorageOptimizationView() {
               </h2>
               <p className="text-gray-700 dark:text-gray-300 mb-4">
                 Our AI has analyzed your storage and found opportunities to save{' '}
-                <strong>3.5 GB</strong> of space!
+                <strong>{totalSavingsGB} GB</strong> of space!
               </p>
               <div className="flex gap-3">
-                <Button className="bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600">
+                <Button 
+                  className="bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600"
+                  onClick={async () => {
+                    if (window.confirm('Are you sure you want to permanently delete all duplicate and old files? This action cannot be undone.')) {
+                        const duplicateIds = data.duplicateFiles.flatMap((f: any) => f.ids.slice(1));
+                        const largeIds = data.largeFiles.map((f: any) => f.id);
+                        await handleBulkDelete([...duplicateIds, ...largeIds]);
+                    }
+                  }}
+                >
                   <Sparkles className="w-4 h-4 mr-2" />
                   Auto-Optimize Now
                 </Button>
                 <Button
                   variant="outline"
                   className="dark:border-gray-600 dark:text-gray-300"
+                  onClick={() => document.getElementById('optimization-content')?.scrollIntoView({ behavior: 'smooth' })}
                 >
                   Review Suggestions
                 </Button>
@@ -117,7 +107,7 @@ export function StorageOptimizationView() {
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div id="optimization-content" className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card className="border-0 shadow-md dark:bg-gray-800">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -130,7 +120,7 @@ export function StorageOptimizationView() {
               <div className="flex justify-between text-sm mb-2">
                 <span className="text-gray-600 dark:text-gray-400">Used Storage</span>
                 <span className="font-medium text-gray-900 dark:text-white">
-                  45.2 GB / 100 GB
+                  Dynamically Calculated
                 </span>
               </div>
               <Progress value={45} className="h-3" />
@@ -138,11 +128,7 @@ export function StorageOptimizationView() {
             <div className="grid grid-cols-2 gap-4 pt-4 border-t border-gray-200 dark:border-gray-700">
               <div>
                 <p className="text-sm text-gray-600 dark:text-gray-400">Potential Savings</p>
-                <p className="text-2xl font-bold text-green-600 dark:text-green-400">3.5 GB</p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-600 dark:text-gray-400">After Optimization</p>
-                <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">41.7 GB</p>
+                <p className="text-2xl font-bold text-green-600 dark:text-green-400">{totalSavingsGB} GB</p>
               </div>
             </div>
           </CardContent>
@@ -154,7 +140,7 @@ export function StorageOptimizationView() {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 gap-3">
-              {optimizationSuggestions.map((suggestion) => {
+              {data.optimizationSuggestions.map((suggestion: any) => {
                 const Icon = suggestion.icon;
                 return (
                   <div
@@ -189,6 +175,10 @@ export function StorageOptimizationView() {
               variant="outline"
               size="sm"
               className="dark:border-gray-600"
+              onClick={() => {
+                const duplicateIds = data.duplicateFiles.flatMap((f: any) => f.ids.slice(1));
+                handleBulkDelete(duplicateIds);
+              }}
             >
               Delete All Duplicates
             </Button>
@@ -196,16 +186,17 @@ export function StorageOptimizationView() {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {duplicateFiles.map((file) => (
+            {data.duplicateFiles.length === 0 ? <p className="text-sm text-gray-500">No duplicate files found.</p> : null}
+            {data.duplicateFiles.map((file: any) => (
               <div
-                key={file.id}
+                key={file.name}
                 className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg"
               >
                 <div className="flex items-start justify-between mb-3">
                   <div>
                     <h4 className="font-medium text-gray-900 dark:text-white">{file.name}</h4>
                     <p className="text-sm text-gray-500 dark:text-gray-400">
-                      {file.copies} copies • Total size: {file.totalSize}
+                      {file.copies} copies • Wasted space: {file.totalSize}
                     </p>
                   </div>
                   <div className="flex gap-2">
@@ -219,15 +210,20 @@ export function StorageOptimizationView() {
                     <Button
                       size="sm"
                       className="bg-red-600 hover:bg-red-700"
+                      onClick={() => {
+                        if (file.ids.length > 1) {
+                           handleBulkDelete(file.ids.slice(1));
+                        }
+                      }}
                     >
                       <Trash2 className="w-4 h-4 mr-1" />
-                      Remove
+                      Remove Copies
                     </Button>
                   </div>
                 </div>
                 <div className="space-y-1">
                   <p className="text-xs text-gray-600 dark:text-gray-400">Locations:</p>
-                  {file.locations.map((location, index) => (
+                  {file.locations.map((location: string, index: number) => (
                     <div
                       key={index}
                       className="text-xs text-gray-500 dark:text-gray-400 pl-2"
@@ -253,6 +249,8 @@ export function StorageOptimizationView() {
               variant="outline"
               size="sm"
               className="dark:border-gray-600"
+              onClick={() => handleBulkDelete(Array.from(selectedArchives))}
+              disabled={selectedArchives.size === 0}
             >
               Archive Selected
             </Button>
@@ -260,7 +258,8 @@ export function StorageOptimizationView() {
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
-            {largeFiles.map((file, index) => (
+            {data.largeFiles.length === 0 ? <p className="text-sm text-gray-500">No large or old files found.</p> : null}
+            {data.largeFiles.map((file: any, index: number) => (
               <div
                 key={index}
                 className="flex items-center justify-between p-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 rounded-lg transition-colors"
@@ -275,7 +274,17 @@ export function StorageOptimizationView() {
                   <span className="text-xs px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 rounded">
                     {file.type}
                   </span>
-                  <input type="checkbox" className="rounded" />
+                  <input 
+                    type="checkbox" 
+                    className="rounded" 
+                    checked={selectedArchives.has(file.id)}
+                    onChange={(e) => {
+                      const newSet = new Set(selectedArchives);
+                      if (e.target.checked) newSet.add(file.id);
+                      else newSet.delete(file.id);
+                      setSelectedArchives(newSet);
+                    }}
+                  />
                 </div>
               </div>
             ))}

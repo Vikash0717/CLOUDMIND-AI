@@ -44,47 +44,17 @@ router.post('/upload', upload.single('file'), async (req: AuthRequest, res) => {
 
     const { originalname, size, mimetype, filename, path: uploadedFilePath } = req.file;
 
-    // Duplicate detection based on content
-    const existingFilesWithSameSize = await prisma.file.findMany({
-      where: {
-        userId: req.userId!,
-        size: size
-      }
-    });
 
-    let isDuplicate = false;
-    if (existingFilesWithSameSize.length > 0) {
-      const newFileBuffer = fs.readFileSync(uploadedFilePath);
-      const newFileHash = crypto.createHash('md5').update(newFileBuffer).digest('hex');
-
-      for (const existingFile of existingFilesWithSameSize) {
-        const existingPath = path.join(__dirname, '../../uploads', existingFile.path);
-        if (fs.existsSync(existingPath)) {
-          const existingBuffer = fs.readFileSync(existingPath);
-          const existingHash = crypto.createHash('md5').update(existingBuffer).digest('hex');
-          if (newFileHash === existingHash) {
-            isDuplicate = true;
-            break;
-          }
+      const file = await prisma.file.create({
+        data: {
+          name: originalname,
+          path: filename,
+          size,
+          type: mimetype,
+          userId: req.userId!,
+          category: getCategoryFromMime(mimetype, originalname)
         }
-      }
-    }
-
-    if (isDuplicate) {
-      fs.unlinkSync(uploadedFilePath);
-      return res.status(409).json({ error: 'Duplicate file detected. This file has already been uploaded.' });
-    }
-
-    const file = await prisma.file.create({
-      data: {
-        name: originalname,
-        path: filename,
-        size,
-        type: mimetype,
-        userId: req.userId!,
-        category: getCategoryFromMime(mimetype)
-      }
-    });
+      });
 
     await prisma.activity.create({
       data: {
@@ -115,6 +85,17 @@ router.get('/download/:id', async (req: AuthRequest, res) => {
       return res.status(404).json({ error: 'Physical file not found' });
     }
 
+    try {
+        await prisma.activity.create({
+            data: {
+              description: `Downloaded file ${file.name}`,
+              userId: req.userId!
+            }
+        });
+    } catch (e) {
+        // silent fail for analytics logging to not disrupt download
+    }
+
     res.download(filePath, file.name);
   } catch (error) {
     console.error('Download Error:', error);
@@ -122,11 +103,17 @@ router.get('/download/:id', async (req: AuthRequest, res) => {
   }
 });
 
-const getCategoryFromMime = (mime: string) => {
+const getCategoryFromMime = (mime: string, name: string) => {
+  const n = name.toLowerCase();
+  if (n.includes('invoice') || n.includes('finance') || n.includes('budget') || n.includes('bill') || n.includes('receipt')) return 'Finance';
+  if (n.includes('cert') || n.includes('degree') || n.includes('edu') || n.includes('assignment') || n.includes('syllabus')) return 'Education';
+  if (n.includes('report') || n.includes('presentation') || n.includes('resume') || n.includes('meeting') || n.includes('work')) return 'Work';
+  if (n.includes('photo') || n.includes('family') || n.includes('vacation') || n.includes('trip') || n.includes('personal')) return 'Personal';
+  
   if (mime.startsWith('image/')) return 'Images';
   if (mime.startsWith('video/')) return 'Videos';
-  if (mime.includes('pdf')) return 'Documents';
-  if (mime.includes('word') || mime.includes('document')) return 'Documents';
+  if (mime.includes('pdf') || mime.includes('doc') || mime.includes('text')) return 'Documents';
+  
   return 'Others';
 };
 

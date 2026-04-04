@@ -14,13 +14,54 @@ if (process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== 'your_openai_ap
 
 router.get('/insights', async (req: AuthRequest, res) => {
   try {
-    // If no real API key is set, we return mock insights
     if (!openai) {
+      const files = await prisma.file.findMany({ where: { userId: req.userId! } });
+      const sizeGroups: Record<number, any[]> = {};
+      files.forEach(f => {
+        if (!sizeGroups[f.size]) sizeGroups[f.size] = [];
+        sizeGroups[f.size].push(f);
+      });
+  
+      let duplicateStats = { count: 0, bytesSaved: 0 };
+      for (const size in sizeGroups) {
+        if (sizeGroups[size].length > 1) {
+          const nameGroups: Record<string, any[]> = {};
+          sizeGroups[size].forEach(f => {
+            const nameLower = f.name.toLowerCase();
+            if (!nameGroups[nameLower]) nameGroups[nameLower] = [];
+            nameGroups[nameLower].push(f);
+          });
+          for (const name in nameGroups) {
+            if (nameGroups[name].length > 1) {
+              duplicateStats.count += nameGroups[name].length - 1;
+              duplicateStats.bytesSaved += Number(size) * (nameGroups[name].length - 1);
+            }
+          }
+        }
+      }
+
+      const ONE_MB = 1024 * 1024;
+      const NINETY_DAYS = 90 * 24 * 60 * 60 * 1000;
+      let oldFilesCount = 0;
+      const now = new Date().getTime();
+      
+      files.forEach(f => {
+        if (f.size > 5 * ONE_MB || (now - new Date(f.createdAt).getTime()) > NINETY_DAYS) {
+          oldFilesCount++;
+        }
+      });
+
+      const dm = 2;
+      const k = 1024;
+      const i = duplicateStats.bytesSaved > 0 ? Math.floor(Math.log(duplicateStats.bytesSaved) / Math.log(k)) : 0;
+      const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+      const savingsStr = duplicateStats.bytesSaved > 0 ? `${parseFloat((duplicateStats.bytesSaved / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}` : '0 MB';
+
       return res.json({
         insights: [
-          { title: 'Duplicate Files Found', description: '12 duplicate files detected, save 156 MB', action: 'Review' },
-          { title: 'Organize Suggestion', description: '45 files could be auto-categorized', action: 'Apply' },
-          { title: 'Archive Old Files', description: '23 files not accessed in 90 days', action: 'Archive' },
+          { title: 'Duplicate Files Found', description: `${duplicateStats.count} redundant files detected, save ${savingsStr}`, action: 'Review' },
+          { title: 'Archive Old Files', description: `${oldFilesCount} large or old files detected`, action: 'Archive' },
+          { title: 'Organize Suggestion', description: 'Enable Auto-Categorization', action: 'Apply' },
         ]
       });
     }

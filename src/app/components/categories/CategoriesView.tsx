@@ -93,6 +93,22 @@ export function CategoriesView() {
     const CategoryIcon = categoryInfo.icon;
     const files = allFiles.filter(f => f.category === selectedCategory);
 
+    // Group files by simplified type
+    const groupedFiles = files.reduce((acc, file) => {
+      let groupName = 'Other Files';
+      const type = file.type.toLowerCase();
+      if (type.includes('pdf')) groupName = 'PDF Documents';
+      else if (type.includes('image')) groupName = 'Images';
+      else if (type.includes('video')) groupName = 'Videos';
+      else if (type.includes('text') || type.includes('txt')) groupName = 'Text Files';
+      else if (type.includes('spreadsheet') || type.includes('excel') || type.includes('csv')) groupName = 'Spreadsheets';
+      else if (type.includes('document') || type.includes('word')) groupName = 'Word Documents';
+      
+      if (!acc[groupName]) acc[groupName] = [];
+      acc[groupName].push(file);
+      return acc;
+    }, {} as Record<string, any[]>);
+
     return (
       <div className="space-y-6">
         <div className="flex items-center gap-4">
@@ -111,44 +127,56 @@ export function CategoriesView() {
           </div>
         </div>
 
-        <Card className="border-0 shadow-md dark:bg-gray-800">
-          <CardContent className="p-0">
-            {files.length > 0 ? (
-              <div className="divide-y divide-gray-100 dark:divide-gray-700">
-                {files.map(file => (
-                  <div key={file.id} className="flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                    <div className="flex items-center gap-4">
-                      <div className={`p-3 rounded-xl bg-gradient-to-br ${categoryInfo.gradient} shadow-sm opacity-90`}>
-                        <FileText className="w-5 h-5 text-white" />
-                      </div>
-                      <div>
-                        <p className="font-medium text-gray-900 dark:text-white">{file.name}</p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{file.type}</p>
-                      </div>
+        {files.length > 0 ? (
+          <div className="space-y-6">
+            {Object.entries(groupedFiles).map(([groupName, groupFiles]) => (
+              <div key={groupName}>
+                <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3 px-2">
+                  {groupName} ({groupFiles.length})
+                </h3>
+                <Card className="border-0 shadow-sm dark:bg-gray-800 overflow-hidden">
+                  <CardContent className="p-0">
+                    <div className="divide-y divide-gray-100 dark:divide-gray-700">
+                      {groupFiles.map(file => (
+                        <div key={file.id} className="flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                          <div className="flex items-center gap-4">
+                            <div className={`p-3 rounded-xl bg-gradient-to-br ${categoryInfo.gradient} shadow-sm opacity-90`}>
+                              <FileText className="w-5 h-5 text-white" />
+                            </div>
+                            <div>
+                              <p className="font-medium text-gray-900 dark:text-white">{file.name}</p>
+                              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{file.type}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-6">
+                            <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                              <HardDrive className="w-4 h-4" />
+                              {(file.size / 1024 / 1024).toFixed(2)} MB
+                            </div>
+                            <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                              <Calendar className="w-4 h-4" />
+                              {new Date(file.updatedAt).toLocaleDateString()}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                    <div className="flex items-center gap-6">
-                      <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
-                        <HardDrive className="w-4 h-4" />
-                        {(file.size / 1024 / 1024).toFixed(2)} MB
-                      </div>
-                      <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
-                        <Calendar className="w-4 h-4" />
-                        {new Date(file.updatedAt).toLocaleDateString()}
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                  </CardContent>
+                </Card>
               </div>
-            ) : (
-              <div className="p-12 text-center text-gray-500 dark:text-gray-400">
-                No files found in this category.
-              </div>
-            )}
-          </CardContent>
-        </Card>
+            ))}
+          </div>
+        ) : (
+          <Card className="border-0 shadow-md dark:bg-gray-800">
+            <CardContent className="p-12 text-center text-gray-500 dark:text-gray-400">
+              No files found in this category.
+            </CardContent>
+          </Card>
+        )}
       </div>
     );
   }
+  const unorganizedCount = allFiles.filter(f => ['Uncategorized', 'Documents', 'Others'].includes(f.category)).length;
 
   return (
     <div className="space-y-6">
@@ -177,12 +205,12 @@ export function CategoriesView() {
           </div>
           <div className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 rounded-lg p-4">
             <p className="text-sm text-gray-700 dark:text-gray-300">
-              💡 <strong>Smart Suggestion:</strong> {uncategorizedCount} uncategorized files detected. Click "Auto-Organize"
+              💡 <strong>Smart Suggestion:</strong> {unorganizedCount} generic files detected. Click "Auto-Organize"
               to let AI categorize them automatically.
             </p>
             <button 
               onClick={handleAutoOrganize}
-              disabled={isOrganizing || uncategorizedCount === 0}
+              disabled={isOrganizing || unorganizedCount === 0}
               className="mt-3 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg transition-colors disabled:opacity-50"
             >
               {isOrganizing ? 'Organizing...' : 'Auto-Organize Files'}

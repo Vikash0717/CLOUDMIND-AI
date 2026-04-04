@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useLocation } from 'react-router';
 import { Card, CardContent } from '../ui/card';
 import { Input } from '../ui/input';
 import { Button } from '../ui/button';
@@ -57,6 +58,25 @@ export function AISearchView() {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const location = useLocation();
+
+  // Handle incoming query from TopNav state
+  useEffect(() => {
+    if (location.state?.query) {
+        setQuery(location.state.query);
+        // We pass query directly as hook state will not have updated yet
+        const initialQuery = location.state.query;
+        if (!initialQuery.trim()) return;
+        setIsSearching(true);
+        api.post('/ai/search', { query: initialQuery })
+            .then(res => setResults(res.data.results || []))
+            .catch(err => { console.error(err); setResults([]); })
+            .finally(() => setIsSearching(false));
+            
+        // clear route state so it doesn't run again on reload
+        window.history.replaceState({}, document.title);
+    }
+  }, [location.state]);
 
   const handleSearch = async () => {
     if (!query.trim()) return;

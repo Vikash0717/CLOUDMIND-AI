@@ -8,6 +8,7 @@ import aiRoutes from './routes/ai';
 import analyticsRoutes from './routes/analytics';
 import categoriesRoutes from './routes/categories';
 import sharedRoutes from './routes/shared';
+import optimizationRoutes from './routes/optimization';
 
 export const prisma = new PrismaClient();
 
@@ -26,6 +27,7 @@ app.use('/api/ai', aiRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/categories', categoriesRoutes);
 app.use('/api/shared', sharedRoutes);
+app.use('/api/optimization', optimizationRoutes);
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
